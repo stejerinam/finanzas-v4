@@ -456,6 +456,10 @@ async function startPipeline() {
     });
     parsedData = await r.json();
     if (parsedData.error) throw new Error(parsedData.error);
+    // Handle case where AI returns a bare array instead of {transactions: [...]}
+    if (Array.isArray(parsedData)) {
+      parsedData = { transactions: parsedData };
+    }
     const n = parsedData.transactions?.length || 0;
     parseComplete = true;
     setParseStatus('done', `✓ ${n} transactions extracted`);

@@ -99,6 +99,10 @@ ${text.slice(0, 100000)}`;
       });
     }
 
+    // Normalize: if AI returned bare array, wrap it
+    if (Array.isArray(parsed)) {
+      parsed = { transactions: parsed };
+    }
     return res.status(200).json(parsed);
   } catch (err) {
     return res.status(500).json({ error: err.message });
