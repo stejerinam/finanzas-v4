@@ -87,7 +87,12 @@ ${text.slice(0, 100000)}`;
     try {
       parsed = JSON.parse(jsonStr);
     } catch (e) {
-      return res.status(500).json({ error: 'Could not parse AI response as JSON', raw: raw.slice(0, 300) });
+      console.error('Parse JSON error. Raw response:', raw.slice(0, 1000));
+      return res.status(500).json({
+        error: 'Could not parse AI response as JSON',
+        raw: raw.slice(0, 500),
+        hint: 'Check Vercel function logs for full response'
+      });
     }
 
     return res.status(200).json(parsed);
