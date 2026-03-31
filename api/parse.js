@@ -87,7 +87,7 @@ ${text.slice(0, 100000)}`;
     try {
       parsed = JSON.parse(jsonStr);
     } catch (e) {
-      console.error('Parse JSON error. Raw response:', raw.slice(0, 1000));
+      console.error('Parse JSON error. Raw:', raw.slice(0, 1000));
       return res.status(500).json({
         error: 'Could not parse AI response as JSON',
         raw: raw.slice(0, 500),

@@ -216,9 +216,15 @@ tr:hover td{background:var(--surface2);}
     </div>
 
     <div class="cat-actions">
-      <button class="btn btn-primary" onclick="startCategorize()">Start Categorizing →</button>
+      <button class="btn btn-primary" id="btn-start-cat" onclick="startCategorize()" disabled>⏳ Waiting for parse…</button>
       <button class="btn btn-secondary" onclick="toggleAddForm()">+ Add category</button>
       <span class="cat-count" id="cat-count">0 categories selected</span>
+    </div>
+
+    <!-- Parse status shown inline while user browses categories -->
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+      <span style="font-size:0.7rem;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Parse status:</span>
+      <span id="parse-status" style="font-size:0.75rem;font-family:'DM Mono',monospace;color:var(--muted)"><span class="spinner"></span>Starting…</span>
     </div>
   </div>
 </div>
@@ -390,6 +396,9 @@ function stripPII(text) {
 }
 
 // ── PIPELINE STEP 1 & 2 ──────────────────────────────────────────────
+let parseComplete = false;
+let parseError = null;
+
 function setStep(id, state, msg) {
   const card = document.getElementById(`step-${id}`);
   const num  = document.getElementById(`sn-${id}`);
@@ -401,24 +410,44 @@ function setStep(id, state, msg) {
   if (state === 'error') num.textContent = '✗';
 }
 
+function updateCatStartBtn() {
+  const btn = document.getElementById('btn-start-cat');
+  if (!btn) return;
+  if (parseError) {
+    btn.disabled = true;
+    btn.textContent = '✗ Parse failed — go back';
+  } else if (!parseComplete) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Waiting for parse…';
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Start Categorizing →';
+  }
+}
+
 async function startPipeline() {
   if (!currentFile) return;
-  show('processing-screen');
+  parseComplete = false;
+  parseError = null;
 
-  // Step 1: Extract
-  setStep('extract', 'active', 'Reading file…');
+  // Show category selector immediately
+  renderCategorySelector();
+  show('cat-screen');
+
+  // Run extract + parse in background
+  setParseStatus('active', 'Reading file…');
   let rawText;
   try {
     rawText = await extractText(currentFile);
     rawText = stripPII(rawText);
-    setStep('extract', 'done', `${rawText.length.toLocaleString()} characters extracted`);
+    setParseStatus('active', `${rawText.length.toLocaleString()} chars — sending to AI…`);
   } catch(e) {
-    setStep('extract', 'error', e.message);
+    parseError = e.message;
+    setParseStatus('error', e.message);
+    updateCatStartBtn();
     return;
   }
 
-  // Step 2: Parse
-  setStep('parse', 'active', 'Sending to AI…');
   try {
     const r = await fetch('/api/parse', {
       method: 'POST',
@@ -428,16 +457,21 @@ async function startPipeline() {
     parsedData = await r.json();
     if (parsedData.error) throw new Error(parsedData.error);
     const n = parsedData.transactions?.length || 0;
-    setStep('parse', 'done', `${n} transactions extracted`);
+    parseComplete = true;
+    setParseStatus('done', `✓ ${n} transactions extracted`);
   } catch(e) {
-    setStep('parse', 'error', e.message);
-    return;
+    parseError = e.message;
+    setParseStatus('error', e.message);
   }
+  updateCatStartBtn();
+}
 
-  // Advance to category selector
-  await sleep(500);
-  renderCategorySelector();
-  show('cat-screen');
+function setParseStatus(state, msg) {
+  const el = document.getElementById('parse-status');
+  if (!el) return;
+  const colors = { active: 'var(--green)', done: 'var(--teal)', error: 'var(--red)' };
+  el.style.color = colors[state] || 'var(--muted)';
+  el.innerHTML = state === 'active' ? `<span class="spinner"></span>${msg}` : msg;
 }
 
 // ── CATEGORY SELECTOR ────────────────────────────────────────────────
@@ -652,6 +686,7 @@ function show(id) {
 }
 function resetApp() {
   currentFile = null; parsedData = null; categorizedData = null;
+  parseComplete = false; parseError = null;
   userCategories = DEFAULT_CATEGORIES.map(c => ({...c}));
   document.getElementById('file-name').textContent = '';
   document.getElementById('btn-start').disabled = true;
