@@ -78,10 +78,14 @@ ${text.slice(0, 100000)}`;
 
     const raw = data.content?.[0]?.text || '';
     let jsonStr = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    const firstBrace = jsonStr.indexOf('{');
-    if (firstBrace > 0) jsonStr = jsonStr.slice(firstBrace);
-    const lastBrace = jsonStr.lastIndexOf('}');
-    if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) jsonStr = jsonStr.slice(0, lastBrace + 1);
+    const firstMatch = jsonStr.match(/[{\[]/);
+    if (firstMatch) {
+      const startIdx = jsonStr.indexOf(firstMatch[0]);
+      if (startIdx > 0) jsonStr = jsonStr.slice(startIdx);
+      const endChar = firstMatch[0] === '{' ? '}' : ']';
+      const lastIdx = jsonStr.lastIndexOf(endChar);
+      if (lastIdx !== -1 && lastIdx < jsonStr.length - 1) jsonStr = jsonStr.slice(0, lastIdx + 1);
+    }
 
     let parsed;
     try {
