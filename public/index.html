@@ -160,6 +160,15 @@ tr:hover td{background:var(--surface2);}
     <button class="acct-btn" data-type="checking" onclick="selectAcct(this)">📋 Checking Account</button>
   </div>
 
+  <div class="section-label" style="margin-top:20px">AI model for parsing</div>
+  <div style="display:flex;gap:8px;margin-bottom:24px;align-items:center;">
+    <div class="acct-group" style="margin-bottom:0">
+      <button class="acct-btn active" id="model-sonnet" onclick="selectModel('sonnet',this)">⚡ Sonnet 4 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">accurate</span></button>
+      <button class="acct-btn" id="model-haiku" onclick="selectModel('haiku',this)">🐦 Haiku 4.5 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">4x cheaper · testing</span></button>
+    </div>
+    <span id="model-note" style="font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace">claude-sonnet-4-6</span>
+  </div>
+
   <button class="btn btn-primary" id="btn-start" disabled onclick="startPipeline()">Parse Statement →</button>
 </div>
 </div>
@@ -332,6 +341,7 @@ const DEFAULT_CATEGORIES = [
 // ── STATE ────────────────────────────────────────────────────────────
 let currentFile = null;
 let selectedAcctType = 'credit';
+let selectedModel = 'sonnet';
 let parsedData = null;
 let categorizedData = null;
 let userCategories = DEFAULT_CATEGORIES.map(c => ({...c}));
@@ -352,9 +362,19 @@ function setFile(file) {
   document.getElementById('btn-start').disabled = false;
 }
 function selectAcct(btn) {
-  document.querySelectorAll('.acct-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.acct-btn[data-type]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   selectedAcctType = btn.dataset.type;
+}
+function selectModel(model, btn) {
+  document.querySelectorAll('#model-sonnet,#model-haiku').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedModel = model;
+  const labels = {
+    sonnet: 'claude-sonnet-4-6',
+    haiku:  'claude-haiku-4-5-20251001',
+  };
+  document.getElementById('model-note').textContent = labels[model];
 }
 
 // ── TEXT EXTRACTION ──────────────────────────────────────────────────
@@ -452,14 +472,10 @@ async function startPipeline() {
     const r = await fetch('/api/parse', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({text: rawText, filename: currentFile.name, accountType: selectedAcctType})
+      body: JSON.stringify({text: rawText, filename: currentFile.name, accountType: selectedAcctType, model: selectedModel})
     });
     parsedData = await r.json();
     if (parsedData.error) throw new Error(parsedData.error);
-    // Handle case where AI returns a bare array instead of {transactions: [...]}
-    if (Array.isArray(parsedData)) {
-      parsedData = { transactions: parsedData };
-    }
     const n = parsedData.transactions?.length || 0;
     parseComplete = true;
     setParseStatus('done', `✓ ${n} transactions extracted`);
@@ -586,7 +602,9 @@ function renderResults() {
   // Metadata
   document.getElementById('meta-bar').innerHTML = [
     ['Bank', parsedData.bank], ['Country', parsedData.country],
-    ['Account', selectedAcctType], ['Currency', currency],
+    ['Account', selectedAcctType],
+    ['Parse Model', selectedModel === 'sonnet' ? '⚡ Sonnet 4' : '🐦 Haiku 4.5'],
+    ['Currency', currency],
     ['Period', `${parsedData.periodStart} → ${parsedData.periodEnd}`],
   ].filter(([,v]) => v).map(([k,v]) => `<div class="meta-pill"><strong>${k}:</strong> ${v}</div>`).join('');
 
@@ -666,6 +684,7 @@ function downloadExcel() {
     {Field:'Bank', Value: parsedData.bank},
     {Field:'Country', Value: parsedData.country},
     {Field:'Account Type', Value: selectedAcctType},
+    {Field:'Parse Model', Value: selectedModel === 'sonnet' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001'},
     {Field:'Period Start', Value: parsedData.periodStart},
     {Field:'Period End', Value: parsedData.periodEnd},
     {Field:'Total Transactions', Value: txns.length},
@@ -680,7 +699,7 @@ function downloadExcel() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Step 3 - Categorized');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(meta), 'Metadata');
 
-  const filename = `finanzas-v4-${(parsedData.bank||'bank').toLowerCase()}-${parsedData.periodStart||'unknown'}.xlsx`;
+  const filename = `finanzas-v4-${selectedModel}-${(parsedData.bank||'bank').toLowerCase()}-${parsedData.periodStart||'unknown'}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 

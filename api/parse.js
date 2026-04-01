@@ -1,12 +1,18 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { text, filename, accountType } = req.body;
+  const { text, filename, accountType, model } = req.body;
   if (!text || text.trim().length < 50)
     return res.status(400).json({ error: 'Text too short or empty' });
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
+
+  const MODELS = {
+    sonnet: 'claude-sonnet-4-6',
+    haiku:  'claude-haiku-4-5-20251001',
+  };
+  const selectedModel = MODELS[model] || MODELS.sonnet;
 
   const accountTypeLabel = {
     credit: 'credit card',
@@ -68,7 +74,7 @@ ${text.slice(0, 100000)}`;
 
   try {
     const data = await callWithRetry({
-      model: 'claude-sonnet-4-6',
+      model: selectedModel,
       max_tokens: 16000,
       temperature: 0,
       messages: [{ role: 'user', content: prompt }],
@@ -78,31 +84,18 @@ ${text.slice(0, 100000)}`;
 
     const raw = data.content?.[0]?.text || '';
     let jsonStr = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    const firstMatch = jsonStr.match(/[{\[]/);
-    if (firstMatch) {
-      const startIdx = jsonStr.indexOf(firstMatch[0]);
-      if (startIdx > 0) jsonStr = jsonStr.slice(startIdx);
-      const endChar = firstMatch[0] === '{' ? '}' : ']';
-      const lastIdx = jsonStr.lastIndexOf(endChar);
-      if (lastIdx !== -1 && lastIdx < jsonStr.length - 1) jsonStr = jsonStr.slice(0, lastIdx + 1);
-    }
+    const firstBrace = jsonStr.indexOf('{');
+    if (firstBrace > 0) jsonStr = jsonStr.slice(firstBrace);
+    const lastBrace = jsonStr.lastIndexOf('}');
+    if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) jsonStr = jsonStr.slice(0, lastBrace + 1);
 
     let parsed;
     try {
       parsed = JSON.parse(jsonStr);
     } catch (e) {
-      console.error('Parse JSON error. Raw:', raw.slice(0, 1000));
-      return res.status(500).json({
-        error: 'Could not parse AI response as JSON',
-        raw: raw.slice(0, 500),
-        hint: 'Check Vercel function logs for full response'
-      });
+      return res.status(500).json({ error: 'Could not parse AI response as JSON', raw: raw.slice(0, 300) });
     }
 
-    // Normalize: if AI returned bare array, wrap it
-    if (Array.isArray(parsed)) {
-      parsed = { transactions: parsed };
-    }
     return res.status(200).json(parsed);
   } catch (err) {
     return res.status(500).json({ error: err.message });
