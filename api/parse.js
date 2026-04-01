@@ -84,10 +84,20 @@ ${text.slice(0, 100000)}`;
 
     const raw = data.content?.[0]?.text || '';
     let jsonStr = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    const firstBrace = jsonStr.indexOf('{');
-    if (firstBrace > 0) jsonStr = jsonStr.slice(firstBrace);
-    const lastBrace = jsonStr.lastIndexOf('}');
-    if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) jsonStr = jsonStr.slice(0, lastBrace + 1);
+    const firstObj = jsonStr.indexOf('{');
+    const firstArr = jsonStr.indexOf('[');
+    let firstToken = -1;
+    if (firstObj !== -1 && firstArr !== -1) firstToken = Math.min(firstObj, firstArr);
+    else if (firstObj !== -1) firstToken = firstObj;
+    else if (firstArr !== -1) firstToken = firstArr;
+    if (firstToken > 0) jsonStr = jsonStr.slice(firstToken);
+    const lastObj = jsonStr.lastIndexOf('}');
+    const lastArr = jsonStr.lastIndexOf(']');
+    const lastToken = Math.max(lastObj, lastArr);
+    if (lastToken !== -1 && lastToken < jsonStr.length - 1) jsonStr = jsonStr.slice(0, lastToken + 1);
+    if (Array.isArray(JSON.parse(jsonStr))) {
+      jsonStr = JSON.stringify({ transactions: JSON.parse(jsonStr) });
+    }
 
     let parsed;
     try {
