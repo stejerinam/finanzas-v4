@@ -41,10 +41,11 @@ Field definitions:
 Rules:
 1. Amounts always positive — use direction for credit/debit
 2. For Excel/CSV: map columns to fields by meaning regardless of language
-3. Include ALL rows — fees, interest, taxes, corrections, reversals
+3. Include ALL rows without exception — fees, interest, taxes, corrections, reversals, zero-amount entries, fee waivers, adjustments. A row with amount 0 is still a valid transaction.
 4. For installment plan summaries, include each as a transaction with type "Installment Plan"
-5. Never skip rows — include uncertain ones with best effort
+5. Never skip any row — if uncertain, include with best effort
 6. Works for any language — extract fields using the same logic regardless
+7. Keep the full description as it appears in the statement including trailing reference codes (e.g. "UBER UPM 200220LK5", "HEB TEC SIH 9511279T7"). Do NOT strip or shorten descriptions — leave cleaning to downstream processes.
 
 Statement:
 ${text.slice(0, 100000)}`;
@@ -84,20 +85,10 @@ ${text.slice(0, 100000)}`;
 
     const raw = data.content?.[0]?.text || '';
     let jsonStr = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-    const firstObj = jsonStr.indexOf('{');
-    const firstArr = jsonStr.indexOf('[');
-    let firstToken = -1;
-    if (firstObj !== -1 && firstArr !== -1) firstToken = Math.min(firstObj, firstArr);
-    else if (firstObj !== -1) firstToken = firstObj;
-    else if (firstArr !== -1) firstToken = firstArr;
-    if (firstToken > 0) jsonStr = jsonStr.slice(firstToken);
-    const lastObj = jsonStr.lastIndexOf('}');
-    const lastArr = jsonStr.lastIndexOf(']');
-    const lastToken = Math.max(lastObj, lastArr);
-    if (lastToken !== -1 && lastToken < jsonStr.length - 1) jsonStr = jsonStr.slice(0, lastToken + 1);
-    if (Array.isArray(JSON.parse(jsonStr))) {
-      jsonStr = JSON.stringify({ transactions: JSON.parse(jsonStr) });
-    }
+    const firstBrace = jsonStr.indexOf('{');
+    if (firstBrace > 0) jsonStr = jsonStr.slice(firstBrace);
+    const lastBrace = jsonStr.lastIndexOf('}');
+    if (lastBrace !== -1 && lastBrace < jsonStr.length - 1) jsonStr = jsonStr.slice(0, lastBrace + 1);
 
     let parsed;
     try {

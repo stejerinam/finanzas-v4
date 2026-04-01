@@ -163,10 +163,10 @@ tr:hover td{background:var(--surface2);}
   <div class="section-label" style="margin-top:20px">AI model for parsing</div>
   <div style="display:flex;gap:8px;margin-bottom:24px;align-items:center;">
     <div class="acct-group" style="margin-bottom:0">
-      <button class="acct-btn active" id="model-sonnet" onclick="selectModel('sonnet',this)">⚡ Sonnet 4 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">accurate</span></button>
-      <button class="acct-btn" id="model-haiku" onclick="selectModel('haiku',this)">🐦 Haiku 4.5 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">4x cheaper · testing</span></button>
+      <button class="acct-btn" id="model-sonnet" onclick="selectModel('sonnet',this)">⚡ Sonnet 4 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">accurate</span></button>
+      <button class="acct-btn active" id="model-haiku" onclick="selectModel('haiku',this)">🐦 Haiku 4.5 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">4x cheaper · default</span></button>
     </div>
-    <span id="model-note" style="font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace">claude-sonnet-4-6</span>
+    <span id="model-note" style="font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace">claude-haiku-4-5-20251001</span>
   </div>
 
   <button class="btn btn-primary" id="btn-start" disabled onclick="startPipeline()">Parse Statement →</button>
@@ -341,7 +341,7 @@ const DEFAULT_CATEGORIES = [
 // ── STATE ────────────────────────────────────────────────────────────
 let currentFile = null;
 let selectedAcctType = 'credit';
-let selectedModel = 'sonnet';
+let selectedModel = 'haiku';
 let parsedData = null;
 let categorizedData = null;
 let userCategories = DEFAULT_CATEGORIES.map(c => ({...c}));
