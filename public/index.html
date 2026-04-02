@@ -170,7 +170,7 @@ tr:hover td{background:var(--surface2);}
   </div>
 
   <div class="section-label">AI model for parsing</div>
-  <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
+  <div style="display:flex;gap:8px;margin-bottom:24px;align-items:center;">
     <div class="acct-group" style="margin-bottom:0">
       <button class="acct-btn" id="model-sonnet" onclick="selectModel('sonnet',this)">⚡ Sonnet 4 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">accurate</span></button>
       <button class="acct-btn active" id="model-haiku" onclick="selectModel('haiku',this)">🐦 Haiku 4.5 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">4x cheaper · default</span></button>
@@ -178,13 +178,8 @@ tr:hover td{background:var(--surface2);}
     <span id="model-note" style="font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace">claude-haiku-4-5-20251001</span>
   </div>
 
-  <div class="section-label">AI model for categorization</div>
-  <div style="display:flex;gap:8px;margin-bottom:24px;align-items:center;">
-    <div class="acct-group" style="margin-bottom:0">
-      <button class="acct-btn active" id="cat-model-sonnet" onclick="selectCatModel('sonnet',this)">⚡ Sonnet 4 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">default</span></button>
-      <button class="acct-btn" id="cat-model-haiku" onclick="selectCatModel('haiku',this)">🐦 Haiku 4.5 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">testing</span></button>
-    </div>
-    <span id="cat-model-note" style="font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace">claude-sonnet-4-6</span>
+  <div style="margin-bottom:24px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;font-size:0.78rem;color:var(--muted);">
+    🌊 <strong style="color:var(--text)">Waterfall categorization</strong> — Haiku handles confident transactions, Sonnet+WebSearch escalates uncertain ones automatically.
   </div>
 
   <button class="btn btn-primary" id="btn-start" disabled onclick="startPipeline()">Parse Statement →</button>
@@ -324,7 +319,7 @@ tr:hover td{background:var(--surface2);}
         <thead><tr>
           <th>#</th><th>Date</th><th>Description</th><th>Reference</th>
           <th style="text-align:right">Amount</th><th>Dir</th>
-          <th>Category</th><th>Confidence</th><th>Reasoning</th>
+          <th>Category</th><th>Confidence</th><th>Tier</th><th>Reasoning</th>
         </tr></thead>
         <tbody id="cat-body"></tbody>
       </table>
@@ -724,10 +719,13 @@ async function startCategorize() {
     const d = await r.json();
     if (d.error) throw new Error(d.error);
     categorizedData = d.results;
+    const stats = d.stats || {};
 
     document.getElementById('step-categorize').className = 'step-card done';
     document.getElementById('sn-categorize').textContent = '✓';
-    document.getElementById('ss-categorize').textContent = `${categorizedData.length} transactions categorized`;
+    const escalatedPct = stats.total ? Math.round((stats.escalated||0)/stats.total*100) : 0;
+    document.getElementById('ss-categorize').textContent =
+      `${categorizedData.length} categorized · ${stats.haikuOnly||0} Haiku · ${stats.escalated||0} escalated (${escalatedPct}%)`;
 
     // Step 4
     document.getElementById('step-export').className = 'step-card active';
@@ -803,6 +801,7 @@ function renderResults() {
       <td><span class="pill ${t.direction==='credit'?'pill-green':'pill-muted'}">${t.direction||'?'}</span></td>
       <td><span class="pill ${isUn?'pill-yellow':'pill-muted'}">${c.finalCategory}${c.autoUnassigned?` <span style="opacity:0.5">(was: ${c.category})</span>`:''}</span></td>
       <td><span class="pill ${confClass}">${conf}%</span></td>
+      <td><span class="pill" style="color:${c.tier==='sonnet+search'?'var(--teal)':'var(--muted)'};border-color:${c.tier==='sonnet+search'?'rgba(82,245,200,0.3)':'var(--border)'};font-size:0.6rem">${c.tier==='sonnet+search'?'🔍 sonnet':'🐦 haiku'}</span></td>
       <td class="reasoning">${esc(c.reasoning||'')}</td>
     </tr>`;
   }).join('');
@@ -847,6 +846,7 @@ function downloadExcel() {
       'Confidence %': Math.round((c.confidence||0)*100),
       'Auto-Unassigned': c.autoUnassigned ? 'YES' : '',
       'Reasoning': c.reasoning,
+      'Tier': c.tier || 'haiku',
     };
   });
 
