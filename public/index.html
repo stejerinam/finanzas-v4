@@ -421,9 +421,12 @@ function buildCountryDropdown() {
   }
 
   // Build list of all countries with their names
-  const countryCodes = Intl.supportedValuesOf
-    ? Intl.supportedValuesOf('region')
-    : ['MX','BO','CO','AR','PE','CL','BR','US','CA','GB','DE','FR','ES','JP','CN','AU','IN'];
+  let countryCodes;
+  try {
+    countryCodes = Intl.supportedValuesOf('region');
+  } catch(e) {
+    countryCodes = ['MX','BO','CO','AR','PE','CL','BR','US','CA','GB','DE','FR','ES','JP','CN','AU','IN'];
+  }
 
   const countries = countryCodes
     .filter(code => code.length === 2) // only country codes, not regions
@@ -452,7 +455,7 @@ function selectCountry(sel) {
     locale: opt.dataset.locale || 'en-US',
   };
 }
-function selectModel(btn, model) {
+function selectModel(model, btn) {
   document.querySelectorAll('#model-sonnet,#model-haiku').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   selectedModel = model;
