@@ -217,6 +217,7 @@ tr:hover td{background:var(--surface2);}
     <!-- Add custom category form -->
     <div class="add-cat-form hidden" id="add-cat-form">
       <div class="section-label" style="margin-bottom:8px">New category</div>
+      <input type="hidden" id="new-cat-type" value="expense">
       <div class="add-cat-row">
         <input class="add-cat-input" id="new-cat-name" placeholder="Name (e.g. Pets)" maxlength="40">
         <input class="add-cat-input" id="new-cat-examples" placeholder="Examples, optional (e.g. Petco, vet clinic, pet food)" maxlength="120">
@@ -235,7 +236,6 @@ tr:hover td{background:var(--surface2);}
 
     <div class="cat-actions">
       <button class="btn btn-primary" id="btn-start-cat" onclick="startCategorize()" disabled>⏳ Waiting for parse…</button>
-      <button class="btn btn-secondary" onclick="toggleAddForm()">+ Add category</button>
       <button class="btn btn-secondary" id="btn-dl-parsed" onclick="downloadParsedOnly()" disabled style="opacity:0.35">⬇ Download parsed</button>
       <span class="cat-count" id="cat-count">0 categories selected</span>
     </div>
@@ -420,27 +420,41 @@ function buildCountryDropdown() {
     return map[countryCode] || 'en-US';
   }
 
-  // Build list of all countries with their names
-  let countryCodes;
-  try {
-    countryCodes = Intl.supportedValuesOf('region');
-  } catch(e) {
-    countryCodes = ['MX','BO','CO','AR','PE','CL','BR','US','CA','GB','DE','FR','ES','JP','CN','AU','IN'];
-  }
+  // Full country list — LATAM first, then rest alphabetically
+  const LATAM = ['MX','BO','AR','CL','CO','PE','BR','CR','CU','DO','EC','GT','HN','NI','PA','PY','SV','UY','VE','PR'];
+  const REST = [
+    'AF','AL','DZ','AD','AO','AG','AM','AU','AT','AZ','BS','BH','BD','BB','BY','BE','BZ','BJ','BT','BW',
+    'BN','BG','BF','BI','CV','KH','CM','CA','CF','TD','CG','CD','KM','CI','HR','CY','CZ','DK','DJ','DM',
+    'EG','GQ','ER','EE','SZ','ET','FJ','FI','FR','GA','GM','GE','DE','GH','GR','GD','GN','GW','GY','HT',
+    'HU','IS','IN','ID','IR','IQ','IE','IL','IT','JM','JP','JO','KZ','KE','KI','KW','KG','LA','LV','LB',
+    'LS','LR','LY','LI','LT','LU','MG','MW','MY','MV','ML','MT','MH','MR','MU','FM','MD','MC','MN','ME',
+    'MA','MZ','MM','NA','NR','NP','NL','NZ','NE','NG','MK','NO','OM','PK','PW','PS','PG','PH','PL','PT',
+    'QA','RO','RU','RW','KN','LC','VC','WS','SM','ST','SA','SN','RS','SC','SL','SG','SK','SI','SB','SO',
+    'ZA','SS','ES','LK','SD','SR','SE','CH','SY','TW','TJ','TZ','TH','TL','TG','TO','TT','TN','TR','TM',
+    'TV','UG','UA','AE','GB','US','UZ','VU','VN','YE','ZM','ZW'
+  ];
 
-  const countries = countryCodes
-    .filter(code => code.length === 2) // only country codes, not regions
-    .map(code => {
-      try { return { code, name: regionNames.of(code) }; }
-      catch { return null; }
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const allCodes = [...LATAM, ...REST];
+  const countries = allCodes.map(code => {
+    try { return { code, name: regionNames.of(code) }; }
+    catch { return null; }
+  }).filter(Boolean);
 
-  // Populate dropdown
-  sel.innerHTML = countries.map(c =>
-    `<option value="${c.code}" data-currency="${getCurrencyForCountry(c.code)}" data-locale="${getLocaleForCountry(c.code)}">${c.name}</option>`
-  ).join('');
+  // Sort REST portion alphabetically, keep LATAM order at top
+  const latamCountries = countries.slice(0, LATAM.length);
+  const restCountries = countries.slice(LATAM.length).sort((a,b) => a.name.localeCompare(b.name));
+
+  // Populate dropdown with LATAM group first, then separator, then rest
+  sel.innerHTML =
+    `<optgroup label="── Latin America ──">` +
+    latamCountries.map(c =>
+      `<option value="${c.code}" data-currency="${getCurrencyForCountry(c.code)}" data-locale="${getLocaleForCountry(c.code)}">${c.name}</option>`
+    ).join('') +
+    `</optgroup><optgroup label="── Rest of World ──">` +
+    restCountries.map(c =>
+      `<option value="${c.code}" data-currency="${getCurrencyForCountry(c.code)}" data-locale="${getLocaleForCountry(c.code)}">${c.name}</option>`
+    ).join('') +
+    `</optgroup>`;
 
   // Default to Mexico
   sel.value = 'MX';
@@ -616,10 +630,12 @@ function renderCategorySelector() {
     <div class="cat-chips-col">
       <div class="cat-chips-col-title">💸 Expenses</div>
       ${expenseChips}
+      <button class="btn btn-secondary" onclick="toggleAddForm('expense')" style="margin-top:4px;font-size:0.78rem;padding:7px 12px;border-style:dashed">+ Add expense</button>
     </div>
     <div class="cat-chips-col">
       <div class="cat-chips-col-title">💰 Income</div>
       ${incomeChips}
+      <button class="btn btn-secondary" onclick="toggleAddForm('income')" style="margin-top:4px;font-size:0.78rem;padding:7px 12px;border-style:dashed">+ Add income</button>
     </div>`;
   updateCatCount();
 }
@@ -635,22 +651,28 @@ function removeCat(e, i) {
   renderCategorySelector();
 }
 
-function toggleAddForm() {
+function toggleAddForm(type) {
   addFormVisible = !addFormVisible;
   document.getElementById('add-cat-form').classList.toggle('hidden', !addFormVisible);
-  if (addFormVisible) document.getElementById('new-cat-name').focus();
+  if (addFormVisible) {
+    document.getElementById('new-cat-name').focus();
+    document.getElementById('new-cat-type').value = type || 'expense';
+    const label = document.querySelector('#add-cat-form .section-label');
+    if (label) label.textContent = type === 'income' ? 'New income category' : 'New expense category';
+  }
 }
 
 function addCategory() {
   const name = document.getElementById('new-cat-name').value.trim();
   const examples = document.getElementById('new-cat-examples').value.trim();
+  const type = document.getElementById('new-cat-type')?.value || 'expense';
   if (!name) return;
   const id = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   userCategories.push({
-    id, label: name, emoji: '📌',
+    id, label: name, emoji: type === 'income' ? '📥' : '📌',
     description: examples ? `Custom category. Examples: ${examples}` : 'Custom category',
     examples: examples || null,
-    active: true, custom: true,
+    active: true, custom: true, type,
   });
   document.getElementById('new-cat-name').value = '';
   document.getElementById('new-cat-examples').value = '';
