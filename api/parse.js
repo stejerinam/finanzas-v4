@@ -79,7 +79,7 @@ ${text.slice(0, 100000)}`;
   try {
     const data = await callWithRetry({
       model: selectedModel,
-      max_tokens: 16000,
+      max_tokens: 32000,
       temperature: 0,
       messages: [{ role: 'user', content: prompt }],
     });
