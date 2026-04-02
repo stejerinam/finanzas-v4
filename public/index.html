@@ -452,6 +452,7 @@ function selectCountry(sel) {
     locale: opt.dataset.locale || 'en-US',
   };
 }
+function selectModel(btn, model) {
   document.querySelectorAll('#model-sonnet,#model-haiku').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   selectedModel = model;
