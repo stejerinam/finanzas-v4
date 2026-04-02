@@ -41,11 +41,14 @@ Field definitions:
 Rules:
 1. Amounts always positive — use direction for credit/debit
 2. For Excel/CSV: map columns to fields by meaning regardless of language
-3. Include ALL rows without exception — fees, interest, taxes, corrections, reversals, zero-amount entries, fee waivers, adjustments. A row with amount 0 is still a valid transaction.
-4. For installment plan summaries, include each as a transaction with type "Installment Plan"
-5. Never skip any row — if uncertain, include with best effort
-6. Works for any language — extract fields using the same logic regardless
-7. Keep the full description as it appears in the statement including trailing reference codes (e.g. "UBER UPM 200220LK5", "HEB TEC SIH 9511279T7"). Do NOT strip or shorten descriptions — leave cleaning to downstream processes.
+3. Only extract rows that represent actual financial transactions — money that moved in or out. Skip:
+   - Rows with no debit or credit amount (balance-only rows, section headers, dividers)
+   - Rows that repeat identically every day with zero amount (e.g. daily interest accruals at 0%)
+   - Summary and subtotal rows
+4. CRITICAL — a statement may have multiple columns: transaction amount, running balance, and others. Only use the debit/credit/transaction amount column. Never use the running balance column as the transaction amount.
+5. For installment plan summaries, include each as a transaction with type "Installment Plan"
+6. If a statement contains multiple account sections, extract transactions from all of them
+7. Works for any language, any country, any bank format
 
 Statement:
 ${text.slice(0, 100000)}`;
@@ -85,6 +88,8 @@ ${text.slice(0, 100000)}`;
 
     const raw = data.content?.[0]?.text || '';
     let jsonStr = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+    // Find start — could be object { or array [
     const firstObj = jsonStr.indexOf('{');
     const firstArr = jsonStr.indexOf('[');
     let firstToken = -1;
@@ -92,6 +97,8 @@ ${text.slice(0, 100000)}`;
     else if (firstObj !== -1) firstToken = firstObj;
     else if (firstArr !== -1) firstToken = firstArr;
     if (firstToken > 0) jsonStr = jsonStr.slice(firstToken);
+
+    // Find end
     const lastObj = jsonStr.lastIndexOf('}');
     const lastArr = jsonStr.lastIndexOf(']');
     const lastToken = Math.max(lastObj, lastArr);
@@ -108,6 +115,7 @@ ${text.slice(0, 100000)}`;
     if (Array.isArray(parsed)) {
       parsed = { transactions: parsed };
     }
+
     return res.status(200).json(parsed);
   } catch (err) {
     return res.status(500).json({ error: err.message });

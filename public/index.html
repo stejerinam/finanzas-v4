@@ -72,7 +72,9 @@ h1 em{color:var(--green);font-style:normal;}
 .cat-selector-card{background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:40px;max-width:780px;margin:0 auto;}
 .cat-selector-title{font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:800;letter-spacing:-0.02em;margin-bottom:8px;}
 .cat-selector-sub{color:var(--muted);font-size:0.86rem;line-height:1.6;margin-bottom:28px;}
-.cat-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;}
+.cat-chips{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
+.cat-chips-col{display:flex;flex-direction:column;gap:8px;}
+.cat-chips-col-title{font-size:0.65rem;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
 .cat-chip{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;border:1.5px solid var(--border2);background:var(--surface2);cursor:pointer;transition:all 0.15s;font-size:0.82rem;position:relative;}
 .cat-chip:hover{border-color:var(--muted);}
 .cat-chip.active{border-color:var(--green);background:rgba(184,245,82,0.06);color:var(--text);}
@@ -160,7 +162,14 @@ tr:hover td{background:var(--surface2);}
     <button class="acct-btn" data-type="checking" onclick="selectAcct(this)">📋 Checking Account</button>
   </div>
 
-  <div class="section-label" style="margin-top:20px">AI model for parsing</div>
+  <div class="section-label" style="margin-top:20px">Country</div>
+  <div style="margin-bottom:20px;">
+    <select id="country-select" onchange="selectCountry(this)"
+      style="width:100%;max-width:340px;background:var(--surface2);border:1.5px solid var(--border2);color:var(--text);padding:9px 12px;border-radius:8px;font-family:'Cabinet Grotesk',sans-serif;font-size:0.88rem;outline:none;cursor:pointer;">
+    </select>
+  </div>
+
+  <div class="section-label">AI model for parsing</div>
   <div style="display:flex;gap:8px;margin-bottom:24px;align-items:center;">
     <div class="acct-group" style="margin-bottom:0">
       <button class="acct-btn" id="model-sonnet" onclick="selectModel('sonnet',this)">⚡ Sonnet 4 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">accurate</span></button>
@@ -227,6 +236,7 @@ tr:hover td{background:var(--surface2);}
     <div class="cat-actions">
       <button class="btn btn-primary" id="btn-start-cat" onclick="startCategorize()" disabled>⏳ Waiting for parse…</button>
       <button class="btn btn-secondary" onclick="toggleAddForm()">+ Add category</button>
+      <button class="btn btn-secondary" id="btn-dl-parsed" onclick="downloadParsedOnly()" disabled style="opacity:0.35">⬇ Download parsed</button>
       <span class="cat-count" id="cat-count">0 categories selected</span>
     </div>
 
@@ -342,12 +352,16 @@ const DEFAULT_CATEGORIES = [
 let currentFile = null;
 let selectedAcctType = 'credit';
 let selectedModel = 'haiku';
+let selectedCountry = { name: 'Mexico', currency: 'MXN', locale: 'es-MX' };
 let parsedData = null;
 let categorizedData = null;
 let userCategories = DEFAULT_CATEGORIES.map(c => ({...c}));
 let addFormVisible = false;
 
 // ── UPLOAD ──────────────────────────────────────────────────────────
+// Initialize country dropdown
+buildCountryDropdown();
+
 const dz = document.getElementById('drop-zone');
 const fi = document.getElementById('file-input');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
@@ -366,7 +380,78 @@ function selectAcct(btn) {
   btn.classList.add('active');
   selectedAcctType = btn.dataset.type;
 }
-function selectModel(model, btn) {
+// Build country list dynamically using Intl API — no hardcoding
+function buildCountryDropdown() {
+  const sel = document.getElementById('country-select');
+  if (!sel) return;
+
+  // Get all region codes and their display names
+  const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+  
+  // Get currency for a country code using Intl
+  function getCurrencyForCountry(countryCode) {
+    try {
+      const formatter = new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: 'USD', // fallback
+      });
+      // Use known mappings for common cases, fall back to USD
+      const map = {
+        MX:'MXN',BO:'BOB',CO:'COP',AR:'ARS',PE:'PEN',CL:'CLP',
+        BR:'BRL',GT:'GTQ',HN:'HNL',NI:'NIO',CR:'CRC',PA:'PAB',
+        EC:'USD',SV:'USD',DO:'DOP',CU:'CUP',VE:'VES',PY:'PYG',UY:'UYU',
+        US:'USD',CA:'CAD',GB:'GBP',EU:'EUR',DE:'EUR',FR:'EUR',ES:'EUR',
+        JP:'JPY',CN:'CNY',AU:'AUD',IN:'INR',ZA:'ZAR',NG:'NGN',KE:'KES',
+      };
+      return map[countryCode] || 'USD';
+    } catch { return 'USD'; }
+  }
+
+  // Get locale for country
+  function getLocaleForCountry(countryCode) {
+    const map = {
+      MX:'es-MX',BO:'es-BO',CO:'es-CO',AR:'es-AR',PE:'es-PE',CL:'es-CL',
+      BR:'pt-BR',GT:'es-GT',HN:'es-HN',NI:'es-NI',CR:'es-CR',PA:'es-PA',
+      EC:'es-EC',SV:'es-SV',DO:'es-DO',CU:'es-CU',VE:'es-VE',PY:'es-PY',
+      UY:'es-UY',US:'en-US',CA:'en-CA',GB:'en-GB',AU:'en-AU',
+      DE:'de-DE',FR:'fr-FR',ES:'es-ES',JP:'ja-JP',CN:'zh-CN',
+      IN:'en-IN',ZA:'en-ZA',NG:'en-NG',KE:'en-KE',
+    };
+    return map[countryCode] || 'en-US';
+  }
+
+  // Build list of all countries with their names
+  const countryCodes = Intl.supportedValuesOf
+    ? Intl.supportedValuesOf('region')
+    : ['MX','BO','CO','AR','PE','CL','BR','US','CA','GB','DE','FR','ES','JP','CN','AU','IN'];
+
+  const countries = countryCodes
+    .filter(code => code.length === 2) // only country codes, not regions
+    .map(code => {
+      try { return { code, name: regionNames.of(code) }; }
+      catch { return null; }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Populate dropdown
+  sel.innerHTML = countries.map(c =>
+    `<option value="${c.code}" data-currency="${getCurrencyForCountry(c.code)}" data-locale="${getLocaleForCountry(c.code)}">${c.name}</option>`
+  ).join('');
+
+  // Default to Mexico
+  sel.value = 'MX';
+  selectedCountry = { name: 'Mexico', currency: 'MXN', locale: 'es-MX' };
+}
+
+function selectCountry(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  selectedCountry = {
+    name: opt.text,
+    currency: opt.dataset.currency || 'USD',
+    locale: opt.dataset.locale || 'en-US',
+  };
+}
   document.querySelectorAll('#model-sonnet,#model-haiku').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   selectedModel = model;
@@ -479,6 +564,9 @@ async function startPipeline() {
     const n = parsedData.transactions?.length || 0;
     parseComplete = true;
     setParseStatus('done', `✓ ${n} transactions extracted`);
+    // Enable download parsed button
+    const dlBtn = document.getElementById('btn-dl-parsed');
+    if (dlBtn) { dlBtn.disabled = false; dlBtn.style.opacity = '1'; }
   } catch(e) {
     parseError = e.message;
     setParseStatus('error', e.message);
@@ -497,14 +585,38 @@ function setParseStatus(state, msg) {
 // ── CATEGORY SELECTOR ────────────────────────────────────────────────
 function renderCategorySelector() {
   const chips = document.getElementById('cat-chips');
-  chips.innerHTML = userCategories.map((c, i) => `
-    <div class="cat-chip ${c.active ? 'active' : 'inactive'} ${c.custom ? 'custom' : ''}"
+  const expenseIds = ['food','cafe','groceries','transport','health','subscriptions','shopping','education','rent','entertainment','fitness','travel','other'];
+  const incomeIds  = ['salary','freelance','reimbursement','other_income'];
+
+  function chipHtml(c, i) {
+    return `<div class="cat-chip ${c.active ? 'active' : 'inactive'} ${c.custom ? 'custom' : ''}"
          onclick="toggleCat(${i})" title="${c.description}">
       <span class="chip-emoji">${c.emoji || '📌'}</span>
       <span class="chip-label">${c.label}</span>
       ${c.custom ? `<span class="chip-remove" onclick="removeCat(event,${i})">×</span>` : ''}
       <div class="chip-desc">${c.description}</div>
-    </div>`).join('');
+    </div>`;
+  }
+
+  const expenseChips = userCategories
+    .map((c, i) => ({c, i}))
+    .filter(({c}) => expenseIds.includes(c.id) || (c.custom && c.type !== 'income'))
+    .map(({c, i}) => chipHtml(c, i)).join('');
+
+  const incomeChips = userCategories
+    .map((c, i) => ({c, i}))
+    .filter(({c}) => incomeIds.includes(c.id) || (c.custom && c.type === 'income'))
+    .map(({c, i}) => chipHtml(c, i)).join('');
+
+  chips.innerHTML = `
+    <div class="cat-chips-col">
+      <div class="cat-chips-col-title">💸 Expenses</div>
+      ${expenseChips}
+    </div>
+    <div class="cat-chips-col">
+      <div class="cat-chips-col-title">💰 Income</div>
+      ${incomeChips}
+    </div>`;
   updateCatCount();
 }
 
@@ -655,6 +767,22 @@ function renderResults() {
 }
 
 // ── EXCEL EXPORT ─────────────────────────────────────────────────────
+function downloadParsedOnly() {
+  if (!parsedData?.transactions) return;
+  const txns = parsedData.transactions;
+  const parseRows = txns.map((t, i) => ({
+    '#': i+1, 'Date': t.date, 'Description': t.description,
+    'Type': t.type, 'Reference': t.reference,
+    'Merchant Hint': t.merchantHint, 'Counterparty': t.counterpartyName,
+    'Counterparty Account': t.counterpartyAccount,
+    'Amount': t.amount, 'Direction': t.direction,
+  }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(parseRows), 'Parsed Transactions');
+  const filename = `finanzas-v4-${selectedModel}-parsed-${(parsedData.bank||'bank').toLowerCase()}-${parsedData.periodStart||'unknown'}.xlsx`;
+  XLSX.writeFile(wb, filename);
+}
+
 function downloadExcel() {
   const txns = parsedData?.transactions || [];
   const cats = categorizedData || [];
@@ -715,9 +843,11 @@ function resetApp() {
   document.getElementById('btn-start').disabled = true;
   show('upload-screen');
 }
-function fmt(n, currency = 'USD') {
-  try { return new Intl.NumberFormat('es-MX', {style:'currency', currency, minimumFractionDigits:2, maximumFractionDigits:2}).format(n); }
-  catch { return n?.toFixed(2) || '—'; }
+function fmt(n, currency) {
+  const cur = currency || selectedCountry?.currency || 'MXN';
+  const loc = selectedCountry?.locale || 'es-MX';
+  try { return new Intl.NumberFormat(loc, {style:'currency', currency: cur, minimumFractionDigits:2, maximumFractionDigits:2}).format(n); }
+  catch { return (n?.toFixed(2) || '—'); }
 }
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
