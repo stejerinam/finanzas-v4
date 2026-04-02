@@ -170,12 +170,21 @@ tr:hover td{background:var(--surface2);}
   </div>
 
   <div class="section-label">AI model for parsing</div>
-  <div style="display:flex;gap:8px;margin-bottom:24px;align-items:center;">
+  <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
     <div class="acct-group" style="margin-bottom:0">
       <button class="acct-btn" id="model-sonnet" onclick="selectModel('sonnet',this)">⚡ Sonnet 4 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">accurate</span></button>
       <button class="acct-btn active" id="model-haiku" onclick="selectModel('haiku',this)">🐦 Haiku 4.5 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">4x cheaper · default</span></button>
     </div>
     <span id="model-note" style="font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace">claude-haiku-4-5-20251001</span>
+  </div>
+
+  <div class="section-label">AI model for categorization</div>
+  <div style="display:flex;gap:8px;margin-bottom:24px;align-items:center;">
+    <div class="acct-group" style="margin-bottom:0">
+      <button class="acct-btn active" id="cat-model-sonnet" onclick="selectCatModel('sonnet',this)">⚡ Sonnet 4 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">default</span></button>
+      <button class="acct-btn" id="cat-model-haiku" onclick="selectCatModel('haiku',this)">🐦 Haiku 4.5 <span style="font-size:0.68rem;opacity:0.6;font-family:'DM Mono',monospace">testing</span></button>
+    </div>
+    <span id="cat-model-note" style="font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace">claude-sonnet-4-6</span>
   </div>
 
   <button class="btn btn-primary" id="btn-start" disabled onclick="startPipeline()">Parse Statement →</button>
@@ -352,6 +361,7 @@ const DEFAULT_CATEGORIES = [
 let currentFile = null;
 let selectedAcctType = 'credit';
 let selectedModel = 'haiku';
+let selectedCatModel = 'sonnet';
 let selectedCountry = { name: 'Mexico', currency: 'MXN', locale: 'es-MX' };
 let parsedData = null;
 let categorizedData = null;
@@ -473,11 +483,15 @@ function selectModel(model, btn) {
   document.querySelectorAll('#model-sonnet,#model-haiku').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   selectedModel = model;
-  const labels = {
-    sonnet: 'claude-sonnet-4-6',
-    haiku:  'claude-haiku-4-5-20251001',
-  };
+  const labels = { sonnet: 'claude-sonnet-4-6', haiku: 'claude-haiku-4-5-20251001' };
   document.getElementById('model-note').textContent = labels[model];
+}
+function selectCatModel(model, btn) {
+  document.querySelectorAll('#cat-model-sonnet,#cat-model-haiku').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedCatModel = model;
+  const labels = { sonnet: 'claude-sonnet-4-6', haiku: 'claude-haiku-4-5-20251001' };
+  document.getElementById('cat-model-note').textContent = labels[model];
 }
 
 // ── TEXT EXTRACTION ──────────────────────────────────────────────────
@@ -701,9 +715,10 @@ async function startCategorize() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         transactions: parsedData.transactions,
-        country: parsedData.country,
+        country: parsedData.country || selectedCountry.name,
         accountType: selectedAcctType,
         categories: activeCategories,
+        model: selectedCatModel,
       })
     });
     const d = await r.json();
@@ -735,13 +750,14 @@ async function startCategorize() {
 function renderResults() {
   const txns = parsedData.transactions || [];
   const cats = categorizedData || [];
-  const currency = parsedData.currency || 'USD';
+  const currency = parsedData.currency || selectedCountry.currency || 'MXN';
 
   // Metadata
   document.getElementById('meta-bar').innerHTML = [
-    ['Bank', parsedData.bank], ['Country', parsedData.country],
+    ['Bank', parsedData.bank], ['Country', parsedData.country || selectedCountry.name],
     ['Account', selectedAcctType],
     ['Parse Model', selectedModel === 'sonnet' ? '⚡ Sonnet 4' : '🐦 Haiku 4.5'],
+    ['Cat Model', selectedCatModel === 'sonnet' ? '⚡ Sonnet 4' : '🐦 Haiku 4.5'],
     ['Currency', currency],
     ['Period', `${parsedData.periodStart} → ${parsedData.periodEnd}`],
   ].filter(([,v]) => v).map(([k,v]) => `<div class="meta-pill"><strong>${k}:</strong> ${v}</div>`).join('');
@@ -853,7 +869,7 @@ function downloadExcel() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(catRows), 'Step 3 - Categorized');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(meta), 'Metadata');
 
-  const filename = `finanzas-v4-${selectedModel}-${(parsedData.bank||'bank').toLowerCase()}-${parsedData.periodStart||'unknown'}.xlsx`;
+  const filename = `finanzas-v4-p${selectedModel}-c${selectedCatModel}-${(parsedData.bank||'bank').toLowerCase()}-${parsedData.periodStart||'unknown'}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
 

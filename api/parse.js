@@ -40,7 +40,8 @@ Field definitions:
 
 Rules:
 1. Amounts always positive — use direction for credit/debit
-2. For Excel/CSV: map columns to fields by meaning regardless of language
+2. Currency consistency — use one currency throughout. If a statement shows amounts in multiple currencies, always use the primary account currency. Never mix currencies across transactions.
+3. For Excel/CSV: map columns to fields by meaning regardless of language
 3. Only extract rows that represent actual financial transactions — money that moved in or out. Skip:
    - Rows with no debit or credit amount (balance-only rows, section headers, dividers)
    - Rows that repeat identically every day with zero amount (e.g. daily interest accruals at 0%)

@@ -1,7 +1,9 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { transactions, country, accountType, categories } = req.body;
+  const { transactions, country, accountType, categories, model } = req.body;
+  const MODELS = { sonnet: 'claude-sonnet-4-6', haiku: 'claude-haiku-4-5-20251001' };
+  const selectedModel = MODELS[model] || MODELS.sonnet;
   if (!transactions || !Array.isArray(transactions) || transactions.length === 0)
     return res.status(400).json({ error: 'transactions array required' });
   if (!categories || !Array.isArray(categories) || categories.length === 0)
@@ -102,7 +104,7 @@ Return ONLY the JSON array.`;
       const prompt = buildPrompt(txns, startIndex, categories, country, accountType);
 
       const data = await callWithRetry({
-        model: 'claude-sonnet-4-6',
+        model: selectedModel,
         max_tokens: 16000,
         temperature: 0,
         messages: [{ role: 'user', content: prompt }],
